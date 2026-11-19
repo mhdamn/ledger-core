@@ -1,2 +1,3 @@
 - 2026-11-19T08:16:44Z repository initialised
 - 2026-11-19T08:16:53Z money helpers and immutable record types written
+- 2026-11-19T08:17:07Z ledger engine: postings, authorisation holds, settlement, reversal
