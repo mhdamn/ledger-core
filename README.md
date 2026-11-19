@@ -31,6 +31,8 @@ per day:
 - **Capitalisation**: Day 6 only.
 - **Closing balances**: ledger, holds, available and interest accrued, per account.
 
+A saved copy of the output from a full run is in [`replay_output.txt`](replay_output.txt).
+
 The final notes print two numbers that need care to read correctly:
 
 - `Day 2 closing by value date, end of Day 5, before fees: -370.00`. This is
