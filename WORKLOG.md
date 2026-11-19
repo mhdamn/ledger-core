@@ -2,3 +2,4 @@
 - 2026-11-19T08:16:53Z money helpers and immutable record types written
 - 2026-11-19T08:17:07Z ledger engine: postings, authorisation holds, settlement, reversal
 - 2026-11-19T08:17:14Z end-of-day overdraft fees, daily interest accrual, capitalisation
+- 2026-11-19T08:17:53Z test suite: rule unit tests, acceptance tests, one annotated expected-failure
