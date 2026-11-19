@@ -212,3 +212,61 @@ class Ledger:
         return self._outcome(day=day, event_id=event_id, account=account, status="REVERSED",
                              detail=(f"reversed {target_event_id} "
                                      f"({fmt(-target.amount, ccy)}), value date {target.value_date}"))
+
+    # ----- end of day: fees and interest -----------------------------------
+    def close_day(self, day: int) -> None:
+        """End-of-day pass. Overdraft fees are assessed for every value date <= day
+        whose closing (ex-fees) is negative and has no fee yet, so backdated
+        entries can trigger fees for earlier value dates. Interest accrues on the
+        closing ledger balance, positive balances only."""
+        for account in self._ccy:
+            self._assess_overdraft(account, day)
+            self._accrue(account, day)
+
+    def _assess_overdraft(self, account: str, day: int) -> None:
+        ccy = self._ccy[account]
+        for vd in range(1, day + 1):
+            key = (account, vd)
+            if key in self._fee_keys:
+                continue
+            closing = self.closing_by_value_date(account, vd, exclude_fees=True)
+            if closing >= 0:
+                continue
+            if ccy not in OVERDRAFT_FEE:
+                raise LedgerError(f"no overdraft fee defined for {ccy}")
+            self._fee_keys.add(key)
+            fee_id = f"FEE-{account}-VD{vd}"
+            self._entry(event_id=fee_id, account=account, kind="FEE", amount=-OVERDRAFT_FEE[ccy],
+                        value_date=vd, booked_day=day)
+            self._outcome(day=day, event_id=fee_id, account=account, status="FEE",
+                          detail=(f"overdraft fee {fmt(OVERDRAFT_FEE[ccy], ccy)} for value date "
+                                  f"{vd}; closing ex-fees {fmt(closing, ccy)} < 0"))
+
+    def _accrue(self, account: str, day: int) -> None:
+        ccy = self._ccy[account]
+        base = self.ledger_balance(account)
+        if base <= 0:
+            return
+        amount = quantize(base * DAILY_INTEREST_RATE, ccy)
+        self._accruals.append(Accrual(seq=self._next(), account=account, day=day,
+                                      base=base, amount=amount))
+
+    def capitalise(self, *, day: int) -> None:
+        """Post one credit per account equal to the sum of its not-yet-capitalised
+        rounded daily accruals. The sum is exact by construction: nothing is
+        discarded and nothing is re-rounded."""
+        for account, ccy in self._ccy.items():
+            done = {s for c in self._caps if c.account == account for s in c.accrual_seqs}
+            pending = [a for a in self._accruals if a.account == account and a.seq not in done]
+            if not pending:
+                continue
+            total = quantize(sum((a.amount for a in pending), ZERO), ccy)
+            cap_id = f"CAP-{account}-D{day}"
+            if total > 0:
+                self._entry(event_id=cap_id, account=account, kind="CAPITALISATION",
+                            amount=total, value_date=day, booked_day=day)
+            self._caps.append(Capitalisation(seq=self._next(), account=account, day=day,
+                                             amount=total,
+                                             accrual_seqs=tuple(a.seq for a in pending)))
+            self._outcome(day=day, event_id=cap_id, account=account, status="CAPITALISED",
+                          detail=f"{len(pending)} daily accruals capitalised, total {fmt(total, ccy)}")
